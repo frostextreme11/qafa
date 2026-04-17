@@ -13,6 +13,10 @@
         android:label="Qafa"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        
+        <meta-data android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyBjg8owVZbCRPcz2_tDZP4KKhsDcyffIqY"/>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

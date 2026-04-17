@@ -4,6 +4,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:math' as math;
 import '../widgets/glass_card.dart';
+import 'map_kabba_screen.dart';
+
 
 class QiblaScreen extends StatefulWidget {
   const QiblaScreen({super.key});
@@ -164,7 +166,7 @@ class _QiblaScreenState extends State<QiblaScreen> with TickerProviderStateMixin
                       Theme.of(context).primaryColor.withOpacity(isDark ? 0.1 : 0.8)
                     ],
                   ).createShader(rect),
-                  child: Icon(Icons.navigation_rounded, size: 180, color: isDark ? Colors.white : Theme.of(context).primaryColor),
+                  child: Icon(Icons.navigation_rounded, size: 180, color: Theme.of(context).primaryColor),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -273,6 +275,36 @@ class _QiblaScreenState extends State<QiblaScreen> with TickerProviderStateMixin
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _currentPosition == null ? null : () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => MapKabbaScreen(
+                        userLat: _currentPosition!.latitude,
+                        userLng: _currentPosition!.longitude,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.map_rounded),
+                label: const Text('MAPS TO KABBAH'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).primaryColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                  textStyle: GoogleFonts.manrope(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 2,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
