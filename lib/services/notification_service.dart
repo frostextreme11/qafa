@@ -63,6 +63,7 @@ class NotificationService {
     String? sound,
     String? channelId,
     String? channelName,
+    DateTimeComponents? matchDateTimeComponents,
   }) async {
     final androidDetails = AndroidNotificationDetails(
       channelId ?? 'default_channel',
@@ -89,12 +90,16 @@ class NotificationService {
       scheduledDate: tz.TZDateTime.from(scheduledDate, tz.local),
       notificationDetails: notificationDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
+      matchDateTimeComponents: matchDateTimeComponents,
     );
   }
 
   Future<void> cancelAll() async {
     await _notificationsPlugin.cancelAll();
+  }
+
+  Future<void> cancel(int id) async {
+    await _notificationsPlugin.cancel(id: id);
   }
 
   Future<void> schedulePrayerReminders({

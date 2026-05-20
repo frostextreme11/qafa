@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../services/notification_service.dart';
 
 enum FastingType {
   qada,
@@ -101,10 +102,91 @@ class FastingProvider with ChangeNotifier {
   List<FastingDay> _fastingDays = [];
   List<FastingTarget> _fastingTargets = [];
   int? _qadaTarget; // User-set target for qada fasting
+  bool _isFastingToday = false;
+  Set<String> _enabledSunnahReminders = {};
 
   List<FastingDay> get fastingDays => _fastingDays;
   List<FastingTarget> get fastingTargets => _fastingTargets;
   int? get qadaTarget => _qadaTarget;
+  bool get isFastingToday => _isFastingToday;
+  Set<String> get enabledSunnahReminders => _enabledSunnahReminders;
+
+  bool isSunnahReminderEnabled(String fastKey) {
+    return _enabledSunnahReminders.contains(fastKey);
+  }
+
+  void setFastingToday(bool value, {DateTime? fajrTime, DateTime? maghribTime}) {
+    _isFastingToday = value;
+    _saveFastingTodayState();
+    
+    if (value && fajrTime != null && maghribTime != null) {
+      _scheduleFastingAlerts(fajrTime, maghribTime);
+    } else {
+      _cancelFastingAlerts();
+    }
+    
+    notifyListeners();
+  }
+
+  void rescheduleFastingAlerts(DateTime fajrTime, DateTime maghribTime) {
+    if (_isFastingToday) {
+      _scheduleFastingAlerts(fajrTime, maghribTime);
+    }
+  }
+
+  Future<void> _scheduleFastingAlerts(DateTime fajrTime, DateTime maghribTime) async {
+    final notificationService = NotificationService();
+    
+    final imsakTime = fajrTime.subtract(const Duration(minutes: 10));
+    final imsakWarningTime = imsakTime.subtract(const Duration(minutes: 15));
+
+    await _cancelFastingAlerts();
+
+    if (imsakWarningTime.isAfter(DateTime.now())) {
+      await notificationService.scheduleNotification(
+        id: 7001,
+        title: '15 Menit Menuju Imsak ⏳',
+        body: 'Persiapkan sahur Anda, waktu imsak akan tiba dalam 15 menit lagi.',
+        scheduledDate: imsakWarningTime,
+        channelId: 'fasting_alerts',
+        channelName: 'Fasting Reminders',
+      );
+    }
+
+    if (imsakTime.isAfter(DateTime.now())) {
+      await notificationService.scheduleNotification(
+        id: 7002,
+        title: 'Waktu Imsak Telah Tiba! 🔔',
+        body: 'Imsak! Hentikan makan dan minum sahur sekarang. Semoga puasa Anda diberkahi.',
+        scheduledDate: imsakTime,
+        channelId: 'fasting_alerts',
+        channelName: 'Fasting Reminders',
+      );
+    }
+
+    if (maghribTime.isAfter(DateTime.now())) {
+      await notificationService.scheduleNotification(
+        id: 7003,
+        title: 'Selamat Berbuka Puasa! 🎉 🌅',
+        body: 'Waktu Maghrib telah tiba. Segeralah membatalkan puasa dan menunaikan ibadah sholat Maghrib.',
+        scheduledDate: maghribTime,
+        channelId: 'fasting_alerts',
+        channelName: 'Fasting Reminders',
+      );
+    }
+  }
+
+  Future<void> _cancelFastingAlerts() async {
+    final notificationService = NotificationService();
+    await notificationService.cancel(7001);
+    await notificationService.cancel(7002);
+    await notificationService.cancel(7003);
+  }
+
+  Future<void> _saveFastingTodayState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isFastingToday', _isFastingToday);
+  }
 
   Map<DateTime, List<FastingDay>> get fastingDaysMap {
     Map<DateTime, List<FastingDay>> map = {};
@@ -217,6 +299,12 @@ class FastingProvider with ChangeNotifier {
     }
 
     _qadaTarget = prefs.getInt('qadaTarget');
+    _isFastingToday = prefs.getBool('isFastingToday') ?? false;
+
+    final sunnahRemindersData = prefs.getStringList('enabledSunnahReminders');
+    if (sunnahRemindersData != null) {
+      _enabledSunnahReminders = sunnahRemindersData.toSet();
+    }
   }
 
   Future<void> _saveFastingData() async {
@@ -256,5 +344,73 @@ class FastingProvider with ChangeNotifier {
         }
       }
     }
+  }
+
+  Future<void> toggleSunnahReminder(String fastKey, List<DateTime> fastDates, String fastName) async {
+    final prefs = await SharedPreferences.getInstance();
+    final notificationService = NotificationService();
+    
+    if (_enabledSunnahReminders.contains(fastKey)) {
+      _enabledSunnahReminders.remove(fastKey);
+      
+      // Cancel scheduled notifications for these dates
+      for (var date in fastDates) {
+        int baseId = 8000 + (date.month * 100) + date.day;
+        int morningId = baseId * 10;
+        int eveningId = (baseId * 10) + 1;
+        await notificationService.cancel(morningId);
+        await notificationService.cancel(eveningId);
+      }
+    } else {
+      _enabledSunnahReminders.add(fastKey);
+      
+      // Schedule H-1 notifications
+      for (var date in fastDates) {
+        DateTime h1 = date.subtract(const Duration(days: 1));
+        
+        DateTime morningTime = DateTime(h1.year, h1.month, h1.day, 6, 0);
+        DateTime eveningTime = DateTime(h1.year, h1.month, h1.day, 20, 30);
+        
+        int baseId = 8000 + (date.month * 100) + date.day;
+        int morningId = baseId * 10;
+        int eveningId = (baseId * 10) + 1;
+        
+        String dateStr = "${date.day} ${_getMonthNameIndo(date.month)} ${date.year}";
+        
+        if (morningTime.isAfter(DateTime.now())) {
+          await notificationService.scheduleNotification(
+            id: morningId,
+            title: 'Persiapan Puasa Besok! 🌅',
+            body: 'Besok ada puasa sunnah $fastName ($dateStr). Jangan lupa sahur nanti malam!',
+            scheduledDate: morningTime,
+            channelId: 'sunnah_fasting',
+            channelName: 'Sunnah Fasting Reminders',
+          );
+        }
+        
+        if (eveningTime.isAfter(DateTime.now())) {
+          await notificationService.scheduleNotification(
+            id: eveningId,
+            title: 'Persiapan Puasa Besok! 🌙',
+            body: 'Niatkan puasa sunnah $fastName untuk esok hari ($dateStr). Siapkan sahur Anda sekarang.',
+            scheduledDate: eveningTime,
+            channelId: 'sunnah_fasting',
+            channelName: 'Sunnah Fasting Reminders',
+          );
+        }
+      }
+    }
+    
+    await prefs.setStringList('enabledSunnahReminders', _enabledSunnahReminders.toList());
+    notifyListeners();
+  }
+  
+  String _getMonthNameIndo(int month) {
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    if (month >= 1 && month <= 12) return months[month - 1];
+    return '';
   }
 }

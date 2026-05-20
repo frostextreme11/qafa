@@ -16,7 +16,6 @@ class QiblaScreen extends StatefulWidget {
 
 class _QiblaScreenState extends State<QiblaScreen> with TickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
 
   CompassEvent? _compassEvent;
   double? _qiblahDirection;
@@ -31,9 +30,6 @@ class _QiblaScreenState extends State<QiblaScreen> with TickerProviderStateMixin
     _controller = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
-    );
-    _animation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOut),
     );
     _controller.forward();
     _refreshLocation();

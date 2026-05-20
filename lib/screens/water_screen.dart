@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../widgets/glass_card.dart';
 import '../providers/water_provider.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/celebration_overlay.dart';
 
 class WaterScreen extends StatefulWidget {
   const WaterScreen({super.key});
@@ -22,7 +23,6 @@ class _WaterScreenState extends State<WaterScreen> with TickerProviderStateMixin
   late Animation<double> _fillAnimation;
 
   DateTime _selectedDate = DateTime.now();
-  bool _showSuccessAnimation = false;
 
   @override
   void initState() {
@@ -187,11 +187,38 @@ class _WaterScreenState extends State<WaterScreen> with TickerProviderStateMixin
     );
   }
 
+  void _checkWaterMilestones(double oldProgress, double newProgress, bool isDark) {
+    if (newProgress <= oldProgress) return;
+    final int oldPct = (oldProgress * 100).round();
+    final int newPct = (newProgress * 100).round();
+    if (newPct >= 100 && oldPct < 100) {
+      CelebrationOverlay.show(context, type: CelebrationType.water100, percentage: 100, isDark: isDark);
+    } else if (newPct >= 50 && oldPct < 50) {
+      CelebrationOverlay.show(context, type: CelebrationType.water50, percentage: 50, isDark: isDark);
+    }
+  }
+
   void _updateWater(WaterProvider provider, SettingsProvider settings, String category, int amount) {
+    final int oldSahur = provider.getWaterAmount(_selectedDate, 'sahur');
+    final int oldBerbuka = provider.getWaterAmount(_selectedDate, 'berbuka');
+    final int oldMalam = provider.getWaterAmount(_selectedDate, 'malam');
+    final int oldTotal = oldSahur + oldBerbuka + oldMalam;
+    final double oldProgress = (oldTotal / WaterProvider.totalTarget).clamp(0.0, 1.0);
+
     provider.addWater(_selectedDate, category, amount);
+
+    final int newSahur = provider.getWaterAmount(_selectedDate, 'sahur');
+    final int newBerbuka = provider.getWaterAmount(_selectedDate, 'berbuka');
+    final int newMalam = provider.getWaterAmount(_selectedDate, 'malam');
+    final int newTotal = newSahur + newBerbuka + newMalam;
+    final double newProgress = (newTotal / WaterProvider.totalTarget).clamp(0.0, 1.0);
+
     if (settings.waterNotificationsEnabled) {
       provider.scheduleSmartWaterReminders(true);
     }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    _checkWaterMilestones(oldProgress, newProgress, isDark);
   }
 
   Widget _buildActionRow(String title, int current, int target, Function(int) onAdd, bool isDark) {

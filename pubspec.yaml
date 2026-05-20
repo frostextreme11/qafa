@@ -53,6 +53,9 @@ dependencies:
   # Gemini AI
   google_generative_ai: ^0.4.0
 
+  # File picker for custom audio files
+  file_picker: ^8.1.4
+
 
 
   # State management
@@ -91,6 +94,8 @@ flutter:
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
+  assets:
+    - shorebird.yaml
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:

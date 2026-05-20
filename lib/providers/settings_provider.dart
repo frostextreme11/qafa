@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:adhan/adhan.dart';
 
 class SettingsProvider with ChangeNotifier {
+  static const Map<String, Map<String, double>> presetLocations = {
+    'Cimahi': {'lat': -6.8722, 'lng': 107.5425},
+    'Bandung': {'lat': -6.9175, 'lng': 107.6191},
+    'Madinah': {'lat': 24.5247, 'lng': 39.5692},
+    'Mekkah': {'lat': 21.3891, 'lng': 39.8579},
+    'Jeddah': {'lat': 21.4858, 'lng': 39.1925},
+  };
+
   String _selectedCity = 'Cimahi';
   Color _selectedColor = const Color(0xFF3CE36A); 
 
@@ -13,6 +23,13 @@ class SettingsProvider with ChangeNotifier {
   bool _waterNotificationsEnabled = false;
   String _notificationSound = 'default';
 
+  // Realtime GPS Prayer Times Option
+  bool _useCurrentLocation = false;
+
+  // Custom Audio Path from device
+  String? _customSoundPath;
+  String? _customSoundName;
+
   String get selectedCity => _selectedCity;
   Color get selectedColor => _selectedColor;
   bool get prayerNotificationsEnabled => _prayerNotificationsEnabled;
@@ -21,6 +38,44 @@ class SettingsProvider with ChangeNotifier {
   bool get prayerNow => _prayerNow;
   bool get waterNotificationsEnabled => _waterNotificationsEnabled;
   String get notificationSound => _notificationSound;
+  bool get useCurrentLocation => _useCurrentLocation;
+  String? get customSoundPath => _customSoundPath;
+  String? get customSoundName => _customSoundName;
+
+  Future<Coordinates> getCoordinates() async {
+    if (_useCurrentLocation) {
+      try {
+        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          final latLng = presetLocations[_selectedCity] ?? presetLocations['Cimahi']!;
+          return Coordinates(latLng['lat']!, latLng['lng']!);
+        }
+
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+          if (permission == LocationPermission.denied) {
+            final latLng = presetLocations[_selectedCity] ?? presetLocations['Cimahi']!;
+            return Coordinates(latLng['lat']!, latLng['lng']!);
+          }
+        }
+        
+        if (permission == LocationPermission.deniedForever) {
+          final latLng = presetLocations[_selectedCity] ?? presetLocations['Cimahi']!;
+          return Coordinates(latLng['lat']!, latLng['lng']!);
+        }
+
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+        return Coordinates(position.latitude, position.longitude);
+      } catch (e) {
+        // Fallback
+      }
+    }
+    final latLng = presetLocations[_selectedCity] ?? presetLocations['Cimahi']!;
+    return Coordinates(latLng['lat']!, latLng['lng']!);
+  }
 
   void setPrayerNotificationsEnabled(bool value) {
     _prayerNotificationsEnabled = value;
@@ -54,6 +109,26 @@ class SettingsProvider with ChangeNotifier {
 
   void setNotificationSound(String sound) {
     _notificationSound = sound;
+    if (sound != 'custom') {
+      _customSoundPath = null;
+      _customSoundName = null;
+    }
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setCustomSound(String? path, String? name) {
+    _customSoundPath = path;
+    _customSoundName = name;
+    if (path != null) {
+      _notificationSound = 'custom';
+    }
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void setUseCurrentLocation(bool value) {
+    _useCurrentLocation = value;
     _saveSettings();
     notifyListeners();
   }
@@ -73,6 +148,9 @@ class SettingsProvider with ChangeNotifier {
     _prayerNow = prefs.getBool('prayerNow') ?? true;
     _waterNotificationsEnabled = prefs.getBool('waterNotificationsEnabled') ?? false;
     _notificationSound = prefs.getString('notificationSound') ?? 'default';
+    _useCurrentLocation = prefs.getBool('useCurrentLocation') ?? false;
+    _customSoundPath = prefs.getString('customSoundPath');
+    _customSoundName = prefs.getString('customSoundName');
     
     final colorValue = prefs.getInt('selectedColor');
     if (colorValue != null) {
@@ -91,5 +169,13 @@ class SettingsProvider with ChangeNotifier {
     await prefs.setBool('prayerNow', _prayerNow);
     await prefs.setBool('waterNotificationsEnabled', _waterNotificationsEnabled);
     await prefs.setString('notificationSound', _notificationSound);
+    await prefs.setBool('useCurrentLocation', _useCurrentLocation);
+    if (_customSoundPath != null) {
+      await prefs.setString('customSoundPath', _customSoundPath!);
+      await prefs.setString('customSoundName', _customSoundName!);
+    } else {
+      await prefs.remove('customSoundPath');
+      await prefs.remove('customSoundName');
+    }
   }
 }

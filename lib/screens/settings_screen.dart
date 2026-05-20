@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:file_picker/file_picker.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/fasting_provider.dart';
@@ -16,13 +17,35 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
+  
+  // Staggered Animations
+  late Animation<double> _appearanceAnim;
+  late Animation<double> _notificationsAnim;
+  late Animation<double> _personalizationAnim;
+  late Animation<double> _aboutAnim;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(duration: const Duration(milliseconds: 600), vsync: this);
-    _animation = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
+    _appearanceAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.4, curve: Curves.easeOutCubic)),
+    );
+    _notificationsAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.2, 0.6, curve: Curves.easeOutCubic)),
+    );
+    _personalizationAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.4, 0.8, curve: Curves.easeOutCubic)),
+    );
+    _aboutAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: const Interval(0.6, 1.0, curve: Curves.easeOutCubic)),
+    );
+
     _controller.forward();
   }
 
@@ -30,6 +53,215 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Widget _buildStaggeredItem({
+    required Animation<double> animation,
+    required Widget child,
+  }) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
+        return Opacity(
+          opacity: animation.value,
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1.0 - animation.value)),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+
+  Future<void> _pickCustomSound(SettingsProvider provider) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final filePath = result.files.single.path;
+        final fileName = result.files.single.name;
+        
+        provider.setCustomSound(filePath, fileName);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFF042A36),
+              content: Text(
+                'Suara kustom terpilih: $fileName',
+                style: GoogleFonts.manrope(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold),
+              ),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red[900],
+            content: Text(
+              'Gagal memilih file suara: ${e.toString()}',
+              style: GoogleFonts.manrope(color: Colors.white),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showSoundPicker(SettingsProvider provider, bool isDark) {
+    final defaultSounds = ['default', 'azan_soft', 'water_drop', 'zen_bell'];
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF02161D),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'ATUR NADA ALARM & NOTIFIKASI',
+                  style: GoogleFonts.manrope(
+                    fontWeight: FontWeight.w900, 
+                    fontSize: 12, 
+                    letterSpacing: 1.5,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // OS Limitations Warning Banner
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.amber.withOpacity(0.18),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.amber,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Catatan OS: File suara kustom eksternal hanya akan berfungsi penuh saat aplikasi aktif di layar (foreground) karena kebijakan keamanan Android/iOS yang membatasi pemutaran file lokal acak di latar belakang.',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            height: 1.45,
+                            color: Colors.amber.shade200,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                // Sound List
+                Expanded(
+                  child: ListView(
+                    physics: const BouncingScrollPhysics(),
+                    children: [
+                      ...defaultSounds.map((soundName) {
+                        final isSelected = provider.notificationSound == soundName;
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            soundName.toUpperCase(), 
+                            style: GoogleFonts.manrope(
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected ? Theme.of(context).primaryColor : Colors.white70,
+                              fontSize: 13,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          trailing: isSelected 
+                              ? Icon(Icons.check_circle_rounded, color: Theme.of(context).primaryColor, size: 20) 
+                              : null,
+                          onTap: () {
+                            provider.setNotificationSound(soundName);
+                            setModalState(() {});
+                            Navigator.pop(context);
+                          },
+                        );
+                      }),
+                      
+                      const Divider(color: Colors.white10, height: 24),
+                      
+                      // Custom Sound Picker
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.audio_file_rounded,
+                            color: Theme.of(context).primaryColor,
+                            size: 18,
+                          ),
+                        ),
+                        title: Text(
+                          'PILIH FILE DARI HP...',
+                          style: GoogleFonts.manrope(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            fontSize: 13,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        subtitle: Text(
+                          provider.customSoundName ?? 'Belum ada file kustom terpilih',
+                          style: GoogleFonts.inter(fontSize: 10, color: Colors.white30),
+                        ),
+                        trailing: provider.notificationSound == 'custom'
+                            ? Icon(Icons.check_circle_rounded, color: Theme.of(context).primaryColor, size: 20)
+                            : Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
+                        onTap: () async {
+                          Navigator.pop(context);
+                          await _pickCustomSound(provider);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      ),
+    );
   }
 
   @override
@@ -50,47 +282,84 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
           ),
         ),
       ),
-      body: FadeTransition(
-        opacity: _animation,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSectionHeader('APPEARANCE'),
-              const SizedBox(height: 12),
-              _buildAppearanceSettings(themeProvider, isDark),
-              
-              const SizedBox(height: 32),
-              _buildSectionHeader('NOTIFICATIONS'),
-              const SizedBox(height: 12),
-              _buildNotificationSettings(settingsProvider, isDark),
-              
-              const SizedBox(height: 32),
-              _buildSectionHeader('PERSONALIZATION'),
-              const SizedBox(height: 12),
-              _buildTargetSettings(context, isDark),
-              
-              const SizedBox(height: 32),
-              _buildSectionHeader('ABOUT'),
-              const SizedBox(height: 12),
-              _buildAboutCard(isDark),
-              
-              const SizedBox(height: 40),
-              Center(
-                child: Text(
-                  'QADA TRACKER V1.0.0',
-                  style: GoogleFonts.manrope(
-                    fontSize: 10,
-                    letterSpacing: 2,
-                    color: (isDark ? Colors.white : Colors.black).withOpacity(0.15),
-                    fontWeight: FontWeight.w800,
-                  ),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Appearance Section
+            _buildStaggeredItem(
+              animation: _appearanceAnim,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionHeader('APPEARANCE'),
+                  const SizedBox(height: 12),
+                  _buildAppearanceSettings(themeProvider, isDark),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 28),
+            
+            // 2. Notifications Section
+            _buildStaggeredItem(
+              animation: _notificationsAnim,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionHeader('NOTIFICATIONS'),
+                  const SizedBox(height: 12),
+                  _buildNotificationSettings(settingsProvider, isDark),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 28),
+            
+            // 3. Personalization Section
+            _buildStaggeredItem(
+              animation: _personalizationAnim,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionHeader('PERSONALIZATION'),
+                  const SizedBox(height: 12),
+                  _buildTargetSettings(context, isDark),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 28),
+            
+            // 4. About Section
+            _buildStaggeredItem(
+              animation: _aboutAnim,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionHeader('ABOUT'),
+                  const SizedBox(height: 12),
+                  _buildAboutCard(isDark),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 40),
+            Center(
+              child: Text(
+                'QADA FAST TRACKER V1.0.0',
+                style: GoogleFonts.manrope(
+                  fontSize: 10,
+                  letterSpacing: 2,
+                  color: (isDark ? Colors.white : Colors.black).withOpacity(0.15),
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              const SizedBox(height: 40),
-            ],
-          ),
+            ),
+            const SizedBox(height: 40),
+          ],
         ),
       ),
     );
@@ -119,7 +388,7 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
             icon: Icons.brightness_4_rounded,
             title: 'Dark Mode',
             subtitle: 'Recommended for Celestial atmosphere',
-            trailing: Switch(
+            trailing: Switch.adaptive(
               value: provider.themeMode == ThemeMode.dark,
               onChanged: (val) => provider.setThemeMode(val ? ThemeMode.dark : ThemeMode.light),
               activeColor: Theme.of(context).primaryColor,
@@ -150,7 +419,7 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
             icon: Icons.mosque_rounded,
             title: 'Prayer Alerts',
             subtitle: 'Enable all Sholat notifications',
-            trailing: Switch(
+            trailing: Switch.adaptive(
               value: provider.prayerNotificationsEnabled,
               onChanged: (val) async {
                 if (val) await NotificationService().requestPermissions();
@@ -170,7 +439,7 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
             icon: Icons.opacity_rounded,
             title: 'Hydration Alerts',
             subtitle: 'Remind me to drink water',
-            trailing: Switch(
+            trailing: Switch.adaptive(
               value: provider.waterNotificationsEnabled,
               onChanged: (val) async {
                 if (val) await NotificationService().requestPermissions();
@@ -184,7 +453,9 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
           _buildSettingsTile(
             icon: Icons.music_note_rounded,
             title: 'Custom Sound',
-            subtitle: provider.notificationSound.toUpperCase(),
+            subtitle: provider.notificationSound == 'custom' 
+                ? (provider.customSoundName ?? 'CUSTOM FILE') 
+                : provider.notificationSound.toUpperCase(),
             onTap: () => _showSoundPicker(provider, isDark),
             isDark: isDark,
           ),
@@ -203,33 +474,6 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
           onChanged: (val) => onChanged(val ?? false),
           activeColor: Theme.of(context).primaryColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        ),
-      ),
-    );
-  }
-
-  void _showSoundPicker(SettingsProvider provider, bool isDark) {
-    final sounds = ['default', 'azan_soft', 'water_drop', 'zen_bell'];
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('CHOOSE SOUND', style: GoogleFonts.manrope(fontWeight: FontWeight.w900, fontSize: 14)),
-            const SizedBox(height: 20),
-            ...sounds.map((s) => ListTile(
-              title: Text(s.toUpperCase(), style: GoogleFonts.inter(fontSize: 14)),
-              trailing: provider.notificationSound == s ? Icon(Icons.check_circle_rounded, color: Theme.of(context).primaryColor) : null,
-              onTap: () {
-                provider.setNotificationSound(s);
-                Navigator.pop(context);
-              },
-            )),
-          ],
         ),
       ),
     );
@@ -263,7 +507,7 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Qada Tracker is your digital sanctuary, designed to bring serenity to your spiritual journey.',
+            'Qada Fast Tracker is your digital sanctuary, designed to bring serenity to your spiritual journey.',
             style: GoogleFonts.inter(fontSize: 13, height: 1.6, color: isDark ? Colors.white.withOpacity(0.7) : Colors.black87),
           ),
           const SizedBox(height: 20),
@@ -280,7 +524,7 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
       children: [
         Icon(icon, size: 14, color: Theme.of(context).primaryColor),
         const SizedBox(width: 12),
-        Text(text, style: GoogleFonts.inter(fontSize: 11, color: isDark ? Colors.white.withOpacity(0.54) : Colors.black54)),
+        Expanded(child: Text(text, style: GoogleFonts.inter(fontSize: 11, color: isDark ? Colors.white.withOpacity(0.54) : Colors.black54))),
       ],
     );
   }
