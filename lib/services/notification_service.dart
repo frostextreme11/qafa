@@ -13,11 +13,23 @@ class NotificationService {
 
   Future<void> init() async {
     tz.initializeTimeZones();
-    // In flutter_timezone 5.0.2, getLocalTimezone returns a Future<TimezoneInfo>
-    // We must extract the identifier string to set the location.
-    final TimezoneInfo tzInfo = await FlutterTimezone.getLocalTimezone();
-    final String timeZoneName = tzInfo.identifier;
-    tz.setLocalLocation(tz.getLocation(timeZoneName));
+    String timeZoneName = 'Asia/Jakarta'; // Default fallback for Cimahi/Bandung region
+    try {
+      final TimezoneInfo tzInfo = await FlutterTimezone.getLocalTimezone();
+      timeZoneName = tzInfo.identifier;
+    } catch (_) {
+      // Keep fallback if retrieval fails
+    }
+
+    try {
+      tz.setLocalLocation(tz.getLocation(timeZoneName));
+    } catch (_) {
+      try {
+        tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
+      } catch (_) {
+        tz.setLocalLocation(tz.UTC);
+      }
+    }
 
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -65,6 +77,9 @@ class NotificationService {
     String? channelName,
     DateTimeComponents? matchDateTimeComponents,
   }) async {
+    if (scheduledDate.isBefore(DateTime.now())) {
+      return;
+    }
     final androidDetails = AndroidNotificationDetails(
       channelId ?? 'default_channel',
       channelName ?? 'Default Notifications',
@@ -100,6 +115,16 @@ class NotificationService {
 
   Future<void> cancel(int id) async {
     await _notificationsPlugin.cancel(id: id);
+  }
+
+  Future<void> cancelAllPrayerReminders() async {
+    final prayers = ['subuh', 'dzuhur', 'ashar', 'maghrib', 'isya'];
+    for (var name in prayers) {
+      int baseId = _getPrayerId(name);
+      await cancel(baseId + 1);
+      await cancel(baseId + 2);
+      await cancel(baseId + 3);
+    }
   }
 
   Future<void> schedulePrayerReminders({

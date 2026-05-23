@@ -128,6 +128,9 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> with TickerProvid
   }
 
   void _scheduleAllPrayerReminders(PrayerTimes times, SettingsProvider provider) async {
+    // Hapus seluruh pengingat sholat lama terlebih dahulu agar jam notifikasi baru akurat sesuai lokasi pilihan user
+    await NotificationService().cancelAllPrayerReminders();
+
     final prayers = {
       'Subuh': times.fajr,
       'Dzuhur': times.dhuhr,
@@ -168,6 +171,99 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> with TickerProvid
         );
       },
       child: child,
+    );
+  }
+
+  Widget _buildNotificationToggle(SettingsProvider settings, bool isDark, Color primaryColor) {
+    return _buildStaggeredItem(
+      animation: _titleAnim,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: GlassCard(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+          isAsymmetric: false,
+          borderRadius: 20,
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: primaryColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  settings.prayerNotificationsEnabled 
+                      ? Icons.notifications_active_rounded 
+                      : Icons.notifications_off_rounded,
+                  color: primaryColor,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'PENGINGAT SHOLAT',
+                      style: GoogleFonts.manrope(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1,
+                        fontSize: 12,
+                        color: primaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      settings.prayerNotificationsEnabled
+                          ? 'Notifikasi adzan aktif untuk wilayah terpilih'
+                          : 'Aktifkan pengingat adzan otomatis',
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: isDark ? Colors.white54 : Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch.adaptive(
+                value: settings.prayerNotificationsEnabled,
+                activeColor: primaryColor,
+                onChanged: (bool value) async {
+                  if (value) {
+                    await NotificationService().requestPermissions();
+                    settings.setPrayerNotificationsEnabled(true);
+                    if (_prayerTimes != null) {
+                      _scheduleAllPrayerReminders(_prayerTimes!, settings);
+                    }
+                  } else {
+                    settings.setPrayerNotificationsEnabled(false);
+                    await NotificationService().cancelAllPrayerReminders();
+                  }
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).clearSnackBars();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          value 
+                            ? 'Notifikasi jadwal sholat berhasil diaktifkan!' 
+                            : 'Notifikasi jadwal sholat dinonaktifkan.',
+                          style: GoogleFonts.inter(),
+                        ),
+                        behavior: SnackBarBehavior.floating,
+                        backgroundColor: value 
+                          ? primaryColor.withOpacity(0.9)
+                          : Colors.grey[800],
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -277,6 +373,8 @@ class _PrayerTimesScreenState extends State<PrayerTimesScreen> with TickerProvid
                 child: _buildNextPrayerHero(isDark, primaryColor),
               ),
             
+            const SizedBox(height: 20),
+            _buildNotificationToggle(settingsProvider, isDark, primaryColor),
             const SizedBox(height: 24),
             
             // 3. Staggered daily schedule heading

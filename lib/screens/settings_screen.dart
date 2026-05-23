@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:shorebird_code_push/shorebird_code_push.dart';
 import '../providers/theme_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/fasting_provider.dart';
@@ -24,9 +25,81 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
   late Animation<double> _personalizationAnim;
   late Animation<double> _aboutAnim;
 
+  // Shorebird Updater State
+  final _shorebirdUpdater = ShorebirdUpdater();
+  bool _isShorebirdAvailable = false;
+  int? _currentPatchNumber;
+  bool _isCheckingForUpdate = false;
+  String _updateStatusMessage = '';
+  bool _restartRequired = false;
+
+  void _initShorebird() {
+    _isShorebirdAvailable = _shorebirdUpdater.isAvailable;
+    if (_isShorebirdAvailable) {
+      _shorebirdUpdater.readCurrentPatch().then((patch) {
+        if (mounted) {
+          setState(() {
+            _currentPatchNumber = patch?.number;
+          });
+        }
+      });
+    }
+  }
+
+  Future<void> _checkForUpdates() async {
+    if (!_isShorebirdAvailable) return;
+    
+    setState(() {
+      _isCheckingForUpdate = true;
+      _updateStatusMessage = 'Memeriksa pembaruan dari server...';
+    });
+
+    try {
+      final status = await _shorebirdUpdater.checkForUpdate();
+      
+      if (!mounted) return;
+
+      if (status == UpdateStatus.outdated) {
+        setState(() {
+          _updateStatusMessage = 'Pembaruan tersedia! Mengunduh...';
+        });
+
+        // Trigger the download of the update
+        await _shorebirdUpdater.update();
+
+        if (mounted) {
+          setState(() {
+            _restartRequired = true;
+            _isCheckingForUpdate = false;
+            _updateStatusMessage = 'Pembaruan berhasil diunduh!';
+          });
+        }
+      } else if (status == UpdateStatus.restartRequired) {
+        setState(() {
+          _restartRequired = true;
+          _isCheckingForUpdate = false;
+          _updateStatusMessage = 'Pembaruan sudah terunduh. Silakan restart!';
+        });
+      } else {
+        setState(() {
+          _isCheckingForUpdate = false;
+          _updateStatusMessage = 'Aplikasi sudah versi terbaru.';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isCheckingForUpdate = false;
+          _updateStatusMessage = 'Gagal memeriksa pembaruan: $e';
+        });
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _initShorebird();
     
     _controller = AnimationController(
       duration: const Duration(milliseconds: 1000),
@@ -333,6 +406,21 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
             
             const SizedBox(height: 28),
             
+            // System Updates Section
+            _buildStaggeredItem(
+              animation: _aboutAnim,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionHeader('SYSTEM UPDATES'),
+                  const SizedBox(height: 12),
+                  _buildShorebirdSettings(isDark),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 28),
+            
             // 4. About Section
             _buildStaggeredItem(
               animation: _aboutAnim,
@@ -349,7 +437,7 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
             const SizedBox(height: 40),
             Center(
               child: Text(
-                'QADA FAST TRACKER V1.0.0',
+                'version  1.0.0+1' + (_currentPatchNumber != null ? ' Patch $_currentPatchNumber' : ''),
                 style: GoogleFonts.manrope(
                   fontSize: 10,
                   letterSpacing: 2,
@@ -373,6 +461,150 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
         fontWeight: FontWeight.w800,
         letterSpacing: 1.5,
         color: Theme.of(context).primaryColor.withOpacity(0.6),
+      ),
+    );
+  }
+
+  Widget _buildShorebirdSettings(bool isDark) {
+    final themeColor = Theme.of(context).primaryColor;
+    return GlassCard(
+      padding: const EdgeInsets.all(20),
+      isAsymmetric: false,
+      borderRadius: 20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: (_isShorebirdAvailable ? Colors.green : Colors.orange).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _isShorebirdAvailable ? Icons.offline_bolt_rounded : Icons.warning_amber_rounded,
+                  color: _isShorebirdAvailable ? Colors.green : Colors.orange,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isShorebirdAvailable ? 'SHOREBIRD ENGINE AKTIF' : 'STANDARD BUILD (NO OTA)',
+                      style: GoogleFonts.manrope(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 12,
+                        letterSpacing: 1.0,
+                        color: _isShorebirdAvailable ? Colors.green : Colors.orange,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isShorebirdAvailable
+                          ? 'Mendukung pembaruan instan otomatis di latar belakang.'
+                          : 'Update instan tidak didukung pada build standar.',
+                      style: GoogleFonts.inter(
+                        fontSize: 10,
+                        color: (isDark ? Colors.white : Colors.black).withOpacity(0.5),
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Divider(color: (isDark ? Colors.white : Colors.black).withOpacity(0.05), height: 1),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Status Pembaruan',
+                    style: GoogleFonts.manrope(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Base: 1.0.0+1' + (_currentPatchNumber != null ? ' (Patch $_currentPatchNumber)' : ' (Belum ada Patch)'),
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: (isDark ? Colors.white : Colors.black).withOpacity(0.5),
+                    ),
+                  ),
+                ],
+              ),
+              if (_isShorebirdAvailable)
+                ElevatedButton.icon(
+                  onPressed: _isCheckingForUpdate ? null : _checkForUpdates,
+                  icon: _isCheckingForUpdate
+                      ? const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.refresh_rounded, size: 14),
+                  label: Text(
+                    _isCheckingForUpdate ? 'MENGECEK...' : 'CEK UPDATE',
+                    style: GoogleFonts.manrope(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 10,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: themeColor,
+                    foregroundColor: const Color(0xFF02161D),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  ),
+                ),
+            ],
+          ),
+          if (_updateStatusMessage.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: themeColor.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: themeColor.withOpacity(0.1)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _restartRequired ? Icons.restart_alt_rounded : Icons.info_outline_rounded,
+                    color: themeColor,
+                    size: 16,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _updateStatusMessage,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: themeColor,
+                        fontWeight: _restartRequired ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

@@ -7,6 +7,7 @@ import '../widgets/glass_card.dart';
 import '../providers/water_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/celebration_overlay.dart';
+import '../services/notification_service.dart';
 
 class WaterScreen extends StatefulWidget {
   const WaterScreen({super.key});
@@ -77,10 +78,96 @@ class _WaterScreenState extends State<WaterScreen> with TickerProviderStateMixin
             _buildDatePicker(isDark),
             const SizedBox(height: 20),
             _buildWaterIndicator(progress, total, isDark),
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
+            _buildReminderToggle(settingsProvider, waterProvider, isDark),
+            const SizedBox(height: 20),
             _buildActionSection(waterProvider, settingsProvider, sahur, berbuka, malam, isDark),
             const SizedBox(height: 20),
             _buildWaterTips(isDark),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReminderToggle(SettingsProvider settings, WaterProvider waterProvider, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: GlassCard(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+        isAsymmetric: false,
+        borderRadius: 20,
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.notifications_active_rounded,
+                color: Theme.of(context).primaryColor,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'PENGINGAT MINUM AIR',
+                    style: GoogleFonts.manrope(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                      fontSize: 12,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    settings.waterNotificationsEnabled
+                        ? 'Pengingat otomatis aktif'
+                        : 'Ingatkan untuk minum air',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: isDark ? Colors.white54 : Colors.black54,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch.adaptive(
+              value: settings.waterNotificationsEnabled,
+              activeColor: Theme.of(context).primaryColor,
+              onChanged: (bool value) async {
+                if (value) {
+                  await NotificationService().requestPermissions();
+                }
+                
+                settings.setWaterNotificationsEnabled(value);
+                waterProvider.scheduleSmartWaterReminders(value);
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        value 
+                          ? 'Pengingat minum air berhasil diaktifkan!' 
+                          : 'Pengingat minum air dinonaktifkan.',
+                        style: GoogleFonts.inter(),
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: value 
+                        ? Theme.of(context).primaryColor.withOpacity(0.9)
+                        : Colors.grey[800],
+                    ),
+                  );
+                }
+              },
+            ),
           ],
         ),
       ),
