@@ -17,6 +17,7 @@ import '../widgets/shimmer_linear_progress.dart';
 import '../widgets/celebration_overlay.dart';
 import '../data/local_quotes.dart';
 import '../services/hijri_helper.dart';
+import '../services/sunnah_fasting_helper.dart';
 import 'worship_plan_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -812,6 +813,57 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildGlowingDayCell(
+    DateTime day,
+    Map<String, dynamic> recommendation,
+    bool isToday,
+    bool isOutside,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Get distinct color based on recommendation, fall back to teal
+    final glowColor = (recommendation['color'] as Color?) ?? const Color(0xFF64FFDA);
+    final textStyle = GoogleFonts.inter(
+      fontSize: 13.5,
+      fontWeight: isToday ? FontWeight.w900 : FontWeight.w700,
+      color: isOutside
+          ? (isDark ? Colors.white24 : Colors.black26)
+          : (isToday
+              ? Theme.of(context).primaryColor
+              : (isDark ? Colors.white : Colors.black87)),
+    );
+
+    return Container(
+      margin: const EdgeInsets.all(4),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: isToday
+            ? Theme.of(context).primaryColor.withOpacity(0.15)
+            : glowColor.withOpacity(isOutside ? 0.04 : 0.08),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: isToday
+              ? Theme.of(context).primaryColor.withOpacity(0.5)
+              : glowColor.withOpacity(isOutside ? 0.25 : 0.55),
+          width: isToday ? 2.0 : 1.2,
+        ),
+        boxShadow: isOutside
+            ? null
+            : [
+                BoxShadow(
+                  color: (isToday ? Theme.of(context).primaryColor : glowColor)
+                      .withOpacity(0.2),
+                  blurRadius: 5,
+                  spreadRadius: 1.5,
+                ),
+              ],
+      ),
+      child: Text(
+        day.day.toString(),
+        style: textStyle,
+      ),
+    );
+  }
+
   Widget _buildCalendarCard(FastingProvider provider, Color textColor) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -855,6 +907,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           },
           eventLoader: (day) => provider.fastingDaysMap[DateTime(day.year, day.month, day.day)] ?? [],
           calendarBuilders: CalendarBuilders(
+            defaultBuilder: (context, day, focusedDay) {
+              final rec = SunnahFastingHelper.getRecommendationForDate(day);
+              if (rec != null) {
+                return _buildGlowingDayCell(day, rec, false, false);
+              }
+              return null;
+            },
+            todayBuilder: (context, day, focusedDay) {
+              final rec = SunnahFastingHelper.getRecommendationForDate(day);
+              if (rec != null) {
+                return _buildGlowingDayCell(day, rec, true, false);
+              }
+              return null;
+            },
+            outsideBuilder: (context, day, focusedDay) {
+              final rec = SunnahFastingHelper.getRecommendationForDate(day);
+              if (rec != null) {
+                return _buildGlowingDayCell(day, rec, false, true);
+              }
+              return null;
+            },
             markerBuilder: (context, day, events) {
               if (events.isNotEmpty) return Positioned(bottom: 2, child: BlinkingMarkers(fastingDays: events.cast<FastingDay>()));
               return null;
@@ -875,6 +948,185 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  Widget _buildRecommendationDialogCard(
+    BuildContext context,
+    Map<String, dynamic> rec,
+    FastingProvider provider,
+    DateTime date,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accentColor = (rec['color'] as Color?) ?? const Color(0xFF64FFDA);
+    final isFuture = DateTime(date.year, date.month, date.day).isAfter(
+        DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day));
+    final isReminderEnabled = provider.isSunnahReminderEnabled(rec['key']);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: GlassCard(
+        isAsymmetric: false,
+        padding: const EdgeInsets.all(16),
+        margin: EdgeInsets.zero,
+        borderRadius: 20,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: accentColor.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.stars_rounded,
+                    color: accentColor,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'REKOMENDASI PUASA SUNNAH',
+                        style: GoogleFonts.manrope(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                          color: accentColor,
+                        ),
+                      ),
+                      Text(
+                        rec['name'] ?? '',
+                        style: GoogleFonts.manrope(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              rec['description'] ?? '',
+              style: GoogleFonts.inter(
+                fontSize: 10.5,
+                color: isDark ? Colors.white70 : Colors.black87,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: (isDark ? Colors.white : Colors.black).withOpacity(0.03),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                rec['rationale'] ?? '',
+                style: GoogleFonts.inter(
+                  fontSize: 9.5,
+                  fontStyle: FontStyle.italic,
+                  color: isDark ? Colors.white54 : Colors.black54,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            if (isFuture) ...[
+              const Divider(height: 20, thickness: 0.5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'PENGINGAT PUASA',
+                          style: GoogleFonts.manrope(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            color: isReminderEnabled
+                                ? accentColor
+                                : (isDark ? Colors.white38 : Colors.black38),
+                          ),
+                        ),
+                        Text(
+                          isReminderEnabled
+                              ? 'Aktif (H-1 Pagi & Malam)'
+                              : 'Ingatkan saya untuk puasa ini',
+                          style: GoogleFonts.inter(
+                            fontSize: 9.5,
+                            color: isDark ? Colors.white54 : Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: isReminderEnabled,
+                    activeColor: accentColor,
+                    onChanged: (val) async {
+                      await provider.toggleSunnahReminder(
+                        rec['key'],
+                        [date],
+                        rec['name'],
+                      );
+
+                      if (context.mounted) {
+                        final nowEnabled =
+                            provider.isSunnahReminderEnabled(rec['key']);
+                        ScaffoldMessenger.of(context).clearSnackBars();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: const Color(0xFF042A36),
+                            content: Row(
+                              children: [
+                                Icon(
+                                  nowEnabled
+                                      ? Icons.notifications_active_rounded
+                                      : Icons.notifications_off_rounded,
+                                  color: accentColor,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    nowEnabled
+                                        ? 'Pengingat Aktif! Notifikasi H-1 akan dikirimkan.'
+                                        : 'Pengingat telah dinonaktifkan.',
+                                    style: GoogleFonts.manrope(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            duration: const Duration(seconds: 3),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showFastingDetailsDialog(DateTime date, List<FastingDay> days) {
     showGeneralDialog(
       context: context,
@@ -883,28 +1135,73 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, a1, a2) => Container(),
       transitionBuilder: (context, a1, a2, child) {
+        final recommendation =
+            SunnahFastingHelper.getRecommendationForDate(date);
         return Transform.scale(
           scale: a1.value,
           child: Opacity(
             opacity: a1.value,
-            child: AlertDialog(
-              backgroundColor: Theme.of(context).dialogBackgroundColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: Text(DateFormat('dd MMMM yyyy').format(date), style: GoogleFonts.manrope(fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.titleLarge?.color)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: days.map((d) => ListTile(
-                  leading: Icon(Icons.check_circle_rounded, color: d.type.color),
-                  title: Text(d.type.name, style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                    onPressed: () {
-                      Provider.of<FastingProvider>(context, listen: false).removeFastingDay(date, d.type);
-                      Navigator.pop(context);
-                    },
+            child: Consumer<FastingProvider>(
+              builder: (context, provider, child) {
+                return AlertDialog(
+                  backgroundColor: Theme.of(context).dialogBackgroundColor,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24)),
+                  title: Text(
+                    DateFormat('dd MMMM yyyy').format(date),
+                    style: GoogleFonts.manrope(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).textTheme.titleLarge?.color,
+                    ),
                   ),
-                )).toList(),
-              ),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (recommendation != null)
+                          _buildRecommendationDialogCard(
+                              context, recommendation, provider, date),
+                        Center(
+                          child: Text(
+                            'KEHADIRAN PUASA',
+                            style: GoogleFonts.manrope(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.5,
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.color
+                                  ?.withOpacity(0.4),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...days.map((d) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.check_circle_rounded,
+                                  color: d.type.color),
+                              title: Text(d.type.name,
+                                  style: TextStyle(
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.color)),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded,
+                                    color: Colors.redAccent),
+                                onPressed: () {
+                                  provider.removeFastingDay(date, d.type);
+                                  Navigator.pop(context);
+                                },
+                              ),
+                            )),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         );
@@ -920,34 +1217,90 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (context, a1, a2) => Container(),
       transitionBuilder: (context, a1, a2, child) {
+        final recommendation =
+            SunnahFastingHelper.getRecommendationForDate(date);
         return Transform.scale(
           scale: a1.value,
           child: Opacity(
             opacity: a1.value,
-            child: AlertDialog(
-              backgroundColor: Theme.of(context).dialogBackgroundColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-              title: Text('LOG FASTING', style: GoogleFonts.manrope(fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 14, color: Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.7))),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: FastingType.values.map((type) => ListTile(
-                  onTap: () {
-                    final provider = Provider.of<FastingProvider>(context, listen: false);
-                    final double oldProgress = provider.qadaProgress;
-                    
-                    provider.addFastingDay(date, type);
-                    
-                    final double newProgress = provider.qadaProgress;
-                    Navigator.pop(context);
-                    
-                    final isDark = Theme.of(context).brightness == Brightness.dark;
-                    _checkQadaMilestones(oldProgress, newProgress, isDark);
-                  },
-                  leading: Container(width: 12, height: 12, decoration: BoxDecoration(color: type.color, shape: BoxShape.circle)),
-                  title: Text(type.name, style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color)),
-                  trailing: Icon(Icons.add_rounded, color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.2)),
-                )).toList(),
-              ),
+            child: Consumer<FastingProvider>(
+              builder: (context, provider, child) {
+                return AlertDialog(
+                  backgroundColor: Theme.of(context).dialogBackgroundColor,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28)),
+                  title: Text(
+                    'LOG & REKOMENDASI PUASA',
+                    style: GoogleFonts.manrope(
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                      fontSize: 13,
+                      color: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.color
+                          ?.withOpacity(0.7),
+                    ),
+                  ),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (recommendation != null)
+                          _buildRecommendationDialogCard(
+                              context, recommendation, provider, date),
+                        Text(
+                          'PILIH JENIS PUASA UNTUK DI-LOG',
+                          style: GoogleFonts.manrope(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                  ?.color
+                                  ?.withOpacity(0.4),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...FastingType.values.map((type) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              onTap: () {
+                                final double oldProgress = provider.qadaProgress;
+                                provider.addFastingDay(date, type);
+                                final double newProgress = provider.qadaProgress;
+                                Navigator.pop(context);
+
+                                final isDark =
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark;
+                                _checkQadaMilestones(
+                                    oldProgress, newProgress, isDark);
+                              },
+                              leading: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: BoxDecoration(
+                                      color: type.color,
+                                      shape: BoxShape.circle)),
+                              title: Text(type.name,
+                                  style: TextStyle(
+                                      color: Theme.of(context)
+                                          .textTheme
+                                          .bodyLarge
+                                          ?.color)),
+                              trailing: Icon(Icons.add_rounded,
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.color
+                                      ?.withOpacity(0.2)),
+                            )),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         );

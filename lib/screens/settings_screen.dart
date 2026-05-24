@@ -536,7 +536,7 @@ class _SettingsScreenState extends State<SettingsScreen> with TickerProviderStat
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Base: 1.0.0+1' + (_currentPatchNumber != null ? ' (Patch $_currentPatchNumber)' : ' (Belum ada Patch)'),
+                    'Base: 1.0.0+2' + (_currentPatchNumber != null ? ' (Patch $_currentPatchNumber)' : ' (Belum ada Patch)'),
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       color: (isDark ? Colors.white : Colors.black).withOpacity(0.5),
